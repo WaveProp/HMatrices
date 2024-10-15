@@ -5,7 +5,7 @@ using Random
 using StaticArrays
 
 using HMatrices: RkMatrix
-
+using HMatrices: ITerm
 include(joinpath(HMatrices.PROJECT_ROOT, "test", "testutils.jl"))
 
 Random.seed!(1)
@@ -86,6 +86,38 @@ end
         @test exact ≈ approx
     end
 
+    @testset "exact vs inexact HMatrix-vector products" begin
+        h_term_test = ITerm(H,1.0e-5)
+
+        #tests with and without global indexes
+
+        exact = mul!(copy(y), H, x, α, β; threads = false, global_index = false)
+        #approx= mul!(copy(y), H, x, α, β,1.0e-5; threads = false, global_index = false)
+        approx= mul!(copy(y), h_term_test, x, α, β; threads = false, global_index = false)
+        @test isapprox(exact,approx;rtol=1.0e-5)
+        exact = mul!(copy(y), H, x, α, β;threads=false)  
+        #approx = mul!(copy(y), H, x, α, β,1e-5;threads=false)
+        approx= mul!(copy(y), h_term_test, x, α, β; threads = false)
+        @test isapprox(exact,approx;rtol=1.0e-5)
+
+        #no mentinon to threads, so it's on by default
+        exact = mul!(copy(y), H, x, α, β;  global_index = false)
+        #approx= mul!(copy(y), H, x, α, β,1.0e-5; global_index = false)
+        approx= mul!(copy(y), h_term_test, x, α, β;global_index = false)
+        @test isapprox(exact,approx;rtol=1.0e-5)
+
+        exact = mul!(copy(y), H, x, α, β)   
+        #approx = mul!(copy(y), H, x, α, β,1e-5)
+        approx= mul!(copy(y), h_term_test, x, α, β)
+        @test isapprox(exact,approx;rtol=1.0e-5)
+
+        #last test checks that if the desired tolerance is to small, we'll use the full low rank matrix instead
+        exact = mul!(copy(y), H, x, α, β)
+        h_term_test.rtol=0.0
+        approx = mul!(copy(y), h_term_test, x, α, β)
+        @test isapprox(exact,approx;rtol=1.0e-5)
+    end
+
     @testset "hermitian" begin
         threads = false
         for threads in (true, false)
@@ -126,4 +158,6 @@ end
         approx = mul!(copy(y), H, x, α, β; threads = false, global_index = true)
         @test exact ≈ approx
     end
+
+
 end

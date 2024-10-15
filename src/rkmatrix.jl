@@ -9,16 +9,23 @@ to get the respective adjoints.
 """
 mutable struct RkMatrix{T} <: AbstractMatrix{T}
     A::Matrix{T}
-    B::Matrix{T}
-    function RkMatrix(A::Matrix{T}, B::Matrix{T}) where {T}
+    B::Matrix{T}    
+    rel_er :: Vector{Float64}
+    function RkMatrix(A::Matrix{T}, B::Matrix{T}, rlist::Vector{Float64}) where {T}
         @assert size(A, 2) == size(B, 2) "second dimension of `A` and `B` must match"
         m, r = size(A)
         n = size(B, 1)
         if r * (m + n) >= m * n
             @debug "Inefficient RkMatrix:" size(A) size(B)
         end
-        return new{T}(A, B)
+        return new{T}(A, B, rlist)
     end
+end
+
+function RkMatrix(A::Matrix{T}, B::Matrix{T}) where {T}
+     rk_matrix = RkMatrix(A,B,Vector{Float64}(undef,0))
+
+     return rk_matrix
 end
 
 function Base.setproperty!(R::RkMatrix, s::Symbol, mat::Base.Matrix)
