@@ -3,6 +3,7 @@ using StaticArrays
 using HMatrices
 using LinearAlgebra
 using SparseArrays
+using DataFlowTasks
 
 include(joinpath(HMatrices.PROJECT_ROOT, "test", "testutils.jl"))
 
@@ -57,4 +58,33 @@ end
     S = spdiagm(0 => rand(T, n))
     Hnew = axpy!(true, S, deepcopy(H))
     @test Matrix(Hnew) == (H_full + Matrix(S))
+end
+
+@testset "Memory overlap" begin
+    m = 1000
+    T = Float64
+
+    X = points_on_sphere(m)
+    Y = X
+    K = laplace_matrix(X, X)
+
+    X1 = points_on_sphere(m)
+    Y1 = X1
+    K1 = laplace_matrix(X1, X1)
+
+    splitter = CardinalitySplitter(; nmax = 50)
+    Xclt = ClusterTree(X, splitter)
+    Yclt = ClusterTree(Y, splitter)
+    X1clt = ClusterTree(X1, splitter)
+    Y1clt = ClusterTree(Y1, splitter)
+    adm = StrongAdmissibilityStd(3)
+    comp = PartialACA(; atol = 1e-10)
+
+    H = assemble_hmatrix(K, Xclt, Yclt; adm, comp, threads = false, distributed = false)
+    H1 = assemble_hmatrix(K1, X1clt, Y1clt; adm, comp, threads = false, distributed = false)
+
+    # Test memory overlap function
+    @test DataFlowTasks.memory_overlap(H, H) == true
+    @test DataFlowTasks.memory_overlap(H, H1) == false
+    @test DataFlowTasks.memory_overlap(H, H.children[1]) == true
 end

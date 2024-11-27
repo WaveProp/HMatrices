@@ -1,6 +1,9 @@
 [deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 ComputationalResources = "ed09eef8-17a6-5b46-8889-db040fac31e3"
+DataFlowTasks = "d1549cb6-e9f4-42f8-98cc-ffc8d067ff5b"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LoopVectorization = "bdcacae8-1622-11e9-2a5c-532679323890"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"

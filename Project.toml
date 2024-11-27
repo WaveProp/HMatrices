@@ -3,6 +3,7 @@ uuid = "8646bddf-ab1c-4fa7-9c51-ba187d647618"
 version = "0.2.10"
 
 [deps]
+DataFlowTasks = "d1549cb6-e9f4-42f8-98cc-ffc8d067ff5b"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"

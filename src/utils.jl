@@ -64,7 +64,7 @@ function leaves(tree)
 end
 
 """
-    leaves(tree)
+    nodes(tree)
 
 Return a vector containing all the nodes of `tree`.
 """
