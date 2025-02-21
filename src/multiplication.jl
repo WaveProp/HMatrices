@@ -1,4 +1,26 @@
 """
+    mutable struct ITerm{T}
+
+Structure to be used in the inexact product. 
+
+"""
+mutable struct ITerm{R,T}<:AbstractMatrix{T}
+    hmatrix::HMatrix{R,T}
+    rtol::Float64
+end
+
+Base.size(H::ITerm) = size(H.hmatrix)
+
+function Base.show(io::IO,hmat::ITerm)
+    isclean(hmat.hmatrix) || return print(io,"Dirty HMatrix in the ITerm")
+    print(io, "Inexact Product with tol $(hmat.rtol) of HMatrix of $(eltype(hmat.hmatrix)) with range $(rowrange(hmat.hmatrix)) × $(colrange(hmat.hmatrix))")
+    _show(io, hmat.hmatrix, false)
+    return io
+end
+
+Base.show(io::IO, ::MIME"text/plain", hmat::ITerm) = show(io, hmat)
+
+"""
     hmul!(C::HMatrix,A::HMatrix,B::HMatrix,a,b,compressor)
 
 Similar to `mul!` : compute `C <-- A*B*a + C*b`, where `A,B,C` are hierarchical
@@ -525,4 +547,113 @@ function LinearAlgebra.rmul!(H::HMatrix, b::Number)
         rmul!(child, b)
     end
     return H
+end
+
+##Inexact implementation
+
+###Stablishes low-rank matrix-vector products with variable tolerance eps
+function LinearAlgebra.mul!(
+    y::AbstractVector,
+    R::RkMatrix,
+    x::AbstractVector,
+    a::Number,
+    b::Number,
+    eps::Float64
+)
+
+    @assert typeof(R)<:RkMatrix "R must be a RkMatrix"
+    k=findfirst(x->x<=eps, R.rel_er)
+    if isnothing(k) #tolerance too low for the residues in the rkmatrix, we'll use all columns
+        k = size(R.A,2)
+    end
+    tmp = adjoint(view(R.B,:,1:k)) * x
+    # tmp = mul!(R.buffer, adjoint(R.B), x)
+    return mul!(y, view(R.A,:,1:k), tmp, a, b)
+end
+
+### HMatrix-vector product with variable tolerance
+
+function LinearAlgebra.mul!(
+    y::AbstractVector,
+    A::ITerm,
+    x::AbstractVector,
+    a::Number,
+    b::Number;
+    global_index = use_global_index(),
+    threads = use_threads(),
+)
+    # since the HMatrix represents A = inv(Pr)*H*Pc, where Pr and Pc are row and column
+    # permutations, we need first to rewrite C <-- b*C + a*(inv(Pr)*H*Pc)*B as
+    # C <-- inv(Pr)*(b*Pr*C + a*H*(Pc*B)). Following this rewrite, the
+    # multiplication is performed by first defining B <-- Pc*B, and C <--
+    # Pr*C, doing the multiplication with the permuted entries, and then
+    # permuting the result  back C <-- inv(Pr)*C at the end.
+    if global_index
+        # permute input
+        x = x[colperm(A.hmatrix)]
+        y = permute!(y, rowperm(A.hmatrix))
+        rmul!(x, a) # multiply in place since this is a new copy, so does not mutate exterior x
+    elseif a != 1
+        x = a * x # new copy of x since we should not mutate the external x in mul!
+    end
+    iszero(b) ? fill!(y, zero(eltype(y))) : rmul!(y, b)
+    # offset in case A is not indexed starting at (1,1); e.g. A is not the root
+    # of and HMatrix
+    offset = pivot(A.hmatrix) .- 1
+    if threads
+        _hgemv_threads!(y, x, leaves(A.hmatrix), offset,A.rtol)  # threaded implementation
+    else
+        _hgemv_recursive!(y, A.hmatrix, x, offset,A.rtol) # serial implementation
+    end
+    #_hgemv_recursive!(y, A, x, offset,tol) # serial implementation
+    # permute output
+    global_index && invpermute!(y, rowperm(A.hmatrix))
+    return y
+end
+
+
+function _hgemv_recursive!(C::AbstractVector, A::HTypes, B::AbstractVector, offset,tol::Float64)
+    if isleaf(A)
+        irange = rowrange(A) .- offset[1]
+        jrange = colrange(A) .- offset[2]
+        d = data(A)
+        if isadmissible(A)
+            mul!(view(C, irange), d, view(B, jrange), 1, 1,tol)
+        else
+            mul!(view(C, irange), d, view(B, jrange), 1, 1)
+        end
+    else
+        for block in children(A)
+            _hgemv_recursive!(C, block, B, offset,tol)
+        end
+    end
+    return C
+end
+
+function _hgemv_threads!(C::AbstractVector, B::AbstractVector, leaves, offset, tol::Float64)
+    acc = Threads.Atomic{Int}(1)
+    lck = ReentrantLock()
+    # spawn np workers to assemble the leaves in parallel
+    np = Threads.nthreads()
+    nl = length(leaves)
+    @sync for _ in 1:np
+        Threads.@spawn begin
+            buf = zero(C)
+            while true
+                i = Threads.atomic_add!(acc, 1)
+                i > nl && break
+                leaf = leaves[i]
+                irange = rowrange(leaf) .- offset[1]
+                jrange = colrange(leaf) .- offset[2]
+                if isadmissible(leaf)
+                    mul!(view(buf, irange), data(leaf), view(B, jrange), 1, 1,tol)
+                else
+                    mul!(view(buf, irange), data(leaf), view(B, jrange), 1, 1)
+                end
+            end
+            # add the local buffer to the global buffer
+            @lock lck axpy!(true, buf, C)
+        end
+    end
+    return C
 end

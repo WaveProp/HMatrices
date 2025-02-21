@@ -11,7 +11,8 @@ Random.seed!(1)
 
 @testset "Scalar" begin
     T = ComplexF64
-    m, n = 100, 100
+    c= 1000
+    m, n = c, c
     X = rand(SVector{3,Float64}, m)
     Y = map(i -> SVector(10, 0, 0) + rand(SVector{3,Float64}), 1:n)
     K = helmholtz_matrix(X, Y, 1.0)

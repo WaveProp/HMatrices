@@ -100,6 +100,10 @@ function _aca_partial(K, irange, jrange, atol, rmax, rtol, istart, buffer_ = not
         ishift, jshift = first(irange) - 1, first(jrange) - 1
         # maps global indices to local indices
     end
+    ####
+    #Vector of residuals to execute InexactGMRES
+    rlist = Vector{Float64}()
+    ####
     buffer = isnothing(buffer_) ? ACABuffer(T, m, n) : buffer_
     A, B, I, J = buffer.A, buffer.B, buffer.I, buffer.J # extract the individual buffers for convenience
     @assert A.k == 0 && B.k == 0 "buffers must be empty"
@@ -166,14 +170,23 @@ function _aca_partial(K, irange, jrange, atol, rmax, rtol, istart, buffer_ = not
             # estimate the norm by || K || ≈ || R_k ||
             est_norm = _update_frob_norm(est_norm, A, B)
             i = _aca_partial_pivot(a, I)
+
+            ###Pushing residue to list
+            push!(rlist,(er/est_norm))
+
             @debug r, er, m, n
         end
     end
     # copy from buffer to matrix and create Rk matrix
-    R_ = RkMatrix(Matrix(A), Matrix(B))
+    R_ = RkMatrix(Matrix(A), Matrix(B),Vector(rlist))
     # # indicate that `A` and `B` can be reused
     reset!(A)
     reset!(B)
+    ## also reusing rlist, so we empty it
+    ## could have used VectorOfVectors() but didn't think of anything better to
+    ## adapt it a varying vector, since rlist may not be equal to rmax, the only fixed
+    ## parameter we have
+    empty!(rlist)
     return R_
 end
 
