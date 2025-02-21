@@ -22,6 +22,20 @@ Random.seed!(1)
         aca = PartialACA(; atol = atol)
         R = aca(M, irange, jrange)
         @test norm(Matrix(R) - M) < atol
+        # test zero matrix
+        R = aca(zero(M), irange, jrange)
+        @test norm(Matrix(R)) ≈ 0.0
+        # low-rank because singular values decay to zero immediately. Error
+        # estimator fails, and warning is thrown
+        tmp = 0 * M
+        tmp[end-20:end, :] .= rand(T, 21, n)
+        R = aca(tmp, irange, jrange)
+        @test Matrix(R) ≈ tmp
+        tmp = 0 * M
+        tmp[1:20, :] .= rand(T, 20, n)
+        R = aca(tmp, irange, jrange)
+        @test Matrix(R) ≈ tmp
+
         rtol = 1e-5
         aca = PartialACA(; rtol = rtol)
         R = aca(M, irange, jrange)
@@ -30,10 +44,6 @@ Random.seed!(1)
         aca = PartialACA(; rank = r)
         R = aca(M, irange, jrange)
         @test rank(R) == r
-
-        # test zero matrix
-        R = aca(zero(M), irange, jrange)
-        @test norm(Matrix(R)) ≈ 0.0
 
         # test fast update of frobenius norm
         m, n = 10000, 1000

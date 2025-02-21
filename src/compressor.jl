@@ -115,6 +115,12 @@ function _aca_partial(K, irange, jrange, atol, rmax, rtol, istart, buffer_ = not
     r = 0 # current rank
     while er > max(atol, rtol * est_norm) && r < rmax
         # remove index i from allowed row
+        if i < 1
+            all(j -> iszero(K[first(irange), j]), jrange) &&
+                all(i -> iszero(K[i, first(jrange)]), irange) ||
+                @warn "aca possibly failed on $irange × $jrange"
+            break
+        end
         I[i] = false
         # pre-allocate row and column
         a = newcol!(A)
